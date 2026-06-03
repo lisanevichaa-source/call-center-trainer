@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Голосовой Тренажёр — Колл-Центр</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f4ff;
+    --surface: #ffffff;
+    --surface2: #f5f7ff;
+    --border: #dde3f5;
+    --accent: #1d5ae8;
+    --accent-light: #4a7ff5;
+    --accent2: #e8341d;
+    --accent3: #1db87a;
+    --text: #1a1f36;
+    --muted: #7b87a8;
+    --font-display: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-body: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: linear-gradient(160deg, #ccd8ff 0%, #e8edff 40%, #f5f7ff 100%);
+    
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 0 32px;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 40px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo h1 {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .logo span { color: #888; }
+
+  .logo span {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text);
+    letter-spacing: 1px;
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+  }
+  .status-dot.active { background: #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+  .status-dot.recording { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* API key setup */
+
+
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  input[type="password"], input[type="text"] {
+    flex: 1;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--accent); background: #fff; }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 1px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .btn:hover { background: var(--accent-light); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(29,90,232,0.3); }
+  .btn:active { transform: translateY(0); }
+  .btn.danger { background: #333; color: #fff; }
+  .btn.danger:hover { background: #111; }
+  .btn.success { background: var(--accent); color: #fff; }
+  .btn.success:hover { background: #17a06a; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Main layout */
+  #main-screen { display: block; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  /* Scenario panel */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(30,86,232,0.06);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: #F8FAFF;
+  }
+
+  .panel-title {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .panel-body { padding: 20px; }
+
+  .scenario-select {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .scenario-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    padding: 12px 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .scenario-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .scenario-btn.active { border-color: var(--accent); background: rgba(232,0,28,0.06); color: var(--accent); }
+
+  .scenario-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 1px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 2px;
+    padding: 2px 6px;
+    margin-right: 8px;
+    text-transform: uppercase;
+  }
+
+  /* Dialog area */
+  .dialog-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    margin-bottom: 20px;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 16px rgba(30,86,232,0.06);
+  }
+
+  #messages {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    max-height: 380px;
+  }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    animation: msgIn 0.3s ease;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.client { flex-direction: row; }
+  .msg.employee { flex-direction: row-reverse; }
+
+  .msg-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+  }
+  .msg.client .msg-avatar { background: #dde8ff; }
+  .msg.employee .msg-avatar { background: #d6f5e8; }
+
+  .msg-bubble {
+    max-width: 70%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .msg.client .msg-bubble { border-top-left-radius: 0; }
+  .msg.employee .msg-bubble { border-top-right-radius: 0; text-align: right; }
+
+  .msg-meta {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Recording controls */
+  .controls {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 24px rgba(29,90,232,0.07);
+  }
+
+  .record-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: rgba(232,0,28,0.08);
+    color: var(--accent);
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .record-btn:hover { background: rgba(232,0,28,0.15); transform: scale(1.05); }
+  .record-btn.recording {
+    background: var(--accent);
+    color: white;
+    animation: recordPulse 1.5s infinite;
+    border-color: var(--accent);
+  }
+  @keyframes recordPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(232,0,28,0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(232,0,28,0); }
+  }
+
+  .voice-visualizer {
+    flex: 1;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .bar {
+    flex: 1;
+    background: var(--border);
+    border-radius: 2px;
+    height: 4px;
+    transition: height 0.1s;
+    max-width: 8px;
+  }
+  .bar.active {
+    background: var(--accent);
+  }
+
+  .control-info {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    min-width: 120px;
+  }
+
+  /* Transcript toggle */
+  .transcript-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle {
+    width: 36px; height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(16px); }
+
+  /* Feedback panel */
+  #feedback-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    display: none;
+    box-shadow: 0 2px 16px rgba(30,86,232,0.06);
+  }
+
+  .feedback-header {
+    background: rgba(232,0,28,0.05);
+    border-bottom: 1px solid rgba(232,0,28,0.15);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .feedback-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+
+  .feedback-body { padding: 24px; }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .score-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+  .score-value {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .score-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .score-high { color: #2ecc71; }
+  .score-mid { color: #f39c12; }
+  .score-low { color: var(--accent); }
+
+  .feedback-text {
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 20px;
+  }
+
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 16px;
+    background: var(--surface);
+    border-radius: 8px;
+  }
+  .thinking-dots span {
+    display: inline-block;
+    animation: blink 1.2s infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+
+  /* Error */
+  .error-msg {
+    background: rgba(255,61,113,0.1);
+    border: 1px solid rgba(255,61,113,0.3);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent2);
+    margin-top: 12px;
+  }
+
+  /* Start/End controls */
+  .session-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .placeholder-msg {
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 50px 20px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+<div class="status-badge">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">ОЖИДАНИЕ</span>
+    </div>
+  </header>
+
+  <!-- Main screen -->
+  <div id="main-screen">
+    <div style="margin-bottom:20px;">
+      <!-- Scenario selector -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Сценарий диалога</span>
+        </div>
+        <div class="panel-body">
+          <div class="scenario-select" id="scenarioList"></div>
+          <div class="session-controls">
+            <button class="btn success" id="startBtn" onclick="startSession()">▶ Начать сессию</button>
+            <button class="btn danger" id="endBtn" onclick="endSession()" disabled>■ Завершить</button>
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+
+    <!-- Dialog -->
+    <div class="dialog-area">
+      <div class="panel-header" style="border-bottom: 1px solid var(--border);">
+        <span class="panel-title">Диалог</span>
+
+      </div>
+      <div id="messages">
+        <div class="placeholder-msg">Выберите сценарий и начните сессию</div>
+      </div>
+    </div>
+
+    <!-- Recording controls -->
+    <div class="controls">
+      <button class="record-btn" id="recordBtn" onclick="toggleRecording()" disabled>🎤</button>
+      <div class="voice-visualizer" id="visualizer">
+        <!-- bars injected by JS -->
+      </div>
+      <div class="control-info" id="controlInfo">СЕССИЯ НЕ АКТИВНА</div>
+    </div>
+
+    <!-- Feedback -->
+    <div id="feedback-panel">
+      <div class="feedback-header">
+        <span style="font-size:1.2rem;">📋</span>
+        <h3>Разбор сессии</h3>
+      </div>
+      <div class="feedback-body">
+        <div class="score-grid" id="scoreGrid"></div>
+        <div class="feedback-text" id="feedbackText"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Scenarios ─────────────────────────────────────────────────────────────
+// ─── Scenarios — loaded from scenarios.json ──────────────────────────────────
+let ALL_SCENARIOS = [];
+let SCENARIOS = [];
+
+async function loadScenarios() {
+  try {
+    const res = await fetch('/scenarios.json?t=' + Date.now());
+    ALL_SCENARIOS = await res.json();
+    SCENARIOS = ALL_SCENARIOS;
+  } catch(e) {
+    console.error('Не удалось загрузить scenarios.json:', e);
+  }
+}
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+let currentScenario = null;
+let conversationHistory = [];
+let isRecording = false;
+let sessionActive = false;
+let showTranscript = true;
+
+let visualizerInterval = null;
+let barsEl = [];
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  // Build visualizer bars
+  const vis = document.getElementById('visualizer');
+  for (let i = 0; i < 32; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    vis.appendChild(bar);
+    barsEl.push(bar);
+  }
+
+  // Load scenarios from file
+  await loadScenarios();
+  renderScenarioList();
+
+  setStatus('ГОТОВ', false, false);
+}
+
+
+// Keys stored on server — no client auth needed
+
+
+function renderScenarioList() {
+  const list = document.getElementById('scenarioList');
+  list.innerHTML = '';
+  SCENARIOS.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'scenario-btn' + (i === 0 ? ' active' : '');
+    const ops = Object.keys(s.states || {}).length;
+    btn.innerHTML = `<span class="scenario-badge">${String(i+1).padStart(2,'0')}</span>${s.name} <span style="color:var(--muted);font-size:0.72rem;display:block;padding-left:36px;margin-top:3px">${s.desc || ops + ' состояний'}</span>`;
+    btn.onclick = () => selectScenario(i);
+    list.appendChild(btn);
+  });
+  if (SCENARIOS.length) {
+    currentScenario = SCENARIOS[0];
+  }
+}
+
+function selectScenario(i) {
+  if (sessionActive) return;
+  currentScenario = SCENARIOS[i];
+  document.querySelectorAll('.scenario-btn').forEach((b, j) => {
+    b.classList.toggle('active', j === i);
+  });
+}
+
+// ─── Session (state machine) ────────────────────────────────────────────────
+let currentStateId = 'start';
+let currentStateRow = null;   // chosen row for current state
+let operatorTurns = [];       // {expected, actual}
+
+async function startSession() {
+  if (!currentScenario) return;
+  sessionActive = true;
+  conversationHistory = [];
+  operatorTurns = [];
+  currentStateId = currentScenario.startState || 'start';
+  currentStateRow = null;
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('endBtn').disabled = false;
+  document.getElementById('recordBtn').disabled = true;
+  document.getElementById('feedback-panel').style.display = 'none';
+  document.getElementById('messages').innerHTML = '';
+  setStatus('АКТИВНА', true, false);
+
+  await advanceState();
+}
+
+async function advanceState() {
+  if (!sessionActive) return;
+
+  const states = currentScenario.states;
+  const rows = states[currentStateId];
+
+  if (!rows || rows.length === 0) {
+    // End of scenario
+    await endSession();
+    return;
+  }
+
+  // Pick random row if multiple options for this state
+  const row = rows[Math.floor(Math.random() * rows.length)];
+  currentStateRow = row;
+
+  // Speak client phrase
+  document.getElementById('recordBtn').disabled = true;
+  document.getElementById('controlInfo').textContent = 'КЛИЕНТ ГОВОРИТ...';
+  addMessage('client', row.agentSpeech);
+  speakText(row.agentSpeech);
+  await waitForSpeech(row.agentSpeech);
+
+  // Enable mic for operator response
+  document.getElementById('recordBtn').disabled = false;
+  document.getElementById('controlInfo').textContent = 'ВАШ ОТВЕТ: нажмите 🎤';
+}
+
+function waitForSpeech(text) {
+  const ms = Math.max(1200, text.length * 75);
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function endSession() {
+  sessionActive = false;
+  stopRecording();
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('endBtn').disabled = true;
+  document.getElementById('recordBtn').disabled = true;
+  document.getElementById('controlInfo').textContent = 'СЕССИЯ ЗАВЕРШЕНА';
+  setStatus('ГОТОВ', false, false);
+
+  if (operatorTurns.length > 0) {
+    await generateFeedback();
+  }
+}
+
+// ─── AI Call (state machine) ─────────────────────────────────────────────────
+async function getAIResponse(operatorText) {
+  if (!operatorText || !sessionActive || !currentStateRow) return;
+
+  const expected = currentStateRow.intent;
+  addMessage('employee', operatorText);
+  document.getElementById('recordBtn').disabled = true;
+  document.getElementById('controlInfo').textContent = 'ПРОВЕРЯЮ ОТВЕТ...';
+
+  // Ask YandexGPT if operator answer matches intent (semantic check)
+  const matches = await checkIntent(operatorText, expected);
+
+  if (!matches) {
+    // Not matched — client says "didn't hear you", wait for retry
+    const retry = 'Извините, я вас не расслышала.';
+    addMessage('client', retry);
+    speakText(retry);
+    await waitForSpeech(retry);
+    document.getElementById('recordBtn').disabled = false;
+    document.getElementById('controlInfo').textContent = 'ПОПРОБУЙТЕ ЕЩЁ РАЗ: нажмите 🎤';
+    return;
+  }
+
+  // Matched — save turn and move to next state
+  operatorTurns.push({ expected, actual: operatorText, stateId: currentStateId });
+  const nextStateId = currentStateRow.nextState;
+
+  if (!nextStateId) {
+    // No next state — end of script
+    await endSession();
+    return;
+  }
+
+  currentStateId = nextStateId;
+  currentStateRow = null;
+  await advanceState();
+}
+
+async function checkIntent(operatorText, expectedIntent) {
+  try {
+    const response = await fetch('/api/gpt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        },
+      headers: {
+          'Content-Type': 'application/json',
+          },
+      body: JSON.stringify({
+        modelUri: 'gpt://placeholder/yandexgpt-lite',
+        completionOptions: { stream: false, temperature: 0.1, maxTokens: 10 },
+        messages: [
+          { role: 'system', text: 'Ты проверяешь ответ оператора колл-центра. Отвечай ТОЛЬКО словом YES или NO. YES — если оператор передал общий смысл эталона, даже если использовал другие слова, сократил фразу или пропустил детали. NO — только если ответ полностью не по теме или оператор промолчал.' },
+          { role: 'user', text: `ЭТАЛОН: ${expectedIntent}
+ОТВЕТ ОПЕРАТОРА: ${operatorText}` }
+        ]
+      })
+    });
+    const data = await response.json();
+    const answer = data.result.alternatives[0].message.text.trim().toUpperCase();
+    return answer.includes('YES');
+  } catch(e) {
+    // On error, assume match to not block the flow
+    return true;
+  }
+}
+
+async function generateFeedback() {
+  document.getElementById('feedback-panel').style.display = 'block';
+  document.getElementById('scoreGrid').innerHTML = '';
+  document.getElementById('feedbackText').textContent = '⏳ Анализирую диалог...';
+
+  if (!operatorTurns.length) {
+    document.getElementById('feedbackText').textContent = 'Нет данных для анализа.';
+    return;
+  }
+
+  // Build comparison text for AI
+  const comparison = operatorTurns.map((t, i) =>
+    `Реплика ${i+1} (состояние: ${t.stateId || ''}):\nОЖИДАЕМО: ${t.expected}\nСКАЗАНО: ${t.actual}`
+  ).join('\n\n');
+
+  try {
+    const feedbackSystemPrompt = `Ты — тренер колл-центра. Сравни фразы оператора с эталонными фразами из скрипта.
+Верни ответ ТОЛЬКО в формате JSON без markdown. Формат:
+{
+  "coverage": число от 0 до 100 (насколько полно оператор передал смысл эталонных фраз),
+  "correctness": число от 0 до 100 (точность формулировок),
+  "standard": число от 0 до 100 (соответствие стандарту обслуживания),
+  "summary": "краткое резюме 1-2 предложения",
+  "good": ["что оператор сказал хорошо 1", "хорошее 2"],
+  "improve": ["что нужно улучшить 1", "улучшить 2"],
+  "details": "подробный разбор каждой реплики — что совпало, что упущено, что лишнее"
+}`;
+
+    const response = await fetch(
+      '/api/gpt',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          },
+        body: JSON.stringify({
+          modelUri: 'gpt://placeholder/yandexgpt',
+          completionOptions: { stream: false, temperature: 0.2, maxTokens: 1500 },
+          messages: [
+            { role: 'system', text: feedbackSystemPrompt },
+            { role: 'user', text: `Сценарий: ${currentScenario.name}\n\n${comparison}` }
+          ]
+        })
+      }
+    );
+
+    const data = await response.json();
+    let text = data.result.alternatives[0].message.text;
+    // Strip possible markdown
+    text = text.replace(/```json|```/g, '').trim();
+    const fb = JSON.parse(text);
+
+    // Scores
+    const scores = [
+      { label: 'Полнота', value: fb.coverage, key: 'coverage' },
+      { label: 'Корректность', value: fb.correctness, key: 'correctness' },
+      { label: 'Стандарт', value: fb.standard, key: 'standard' }
+    ];
+
+    document.getElementById('scoreGrid').innerHTML = scores.map(s => {
+      const cls = s.value >= 75 ? 'score-high' : s.value >= 50 ? 'score-mid' : 'score-low';
+      return `<div class="score-card">
+        <div class="score-value ${cls}">${s.value}%</div>
+        <div class="score-label">${s.label}</div>
+      </div>`;
+    }).join('');
+
+    // Build detailed comparison table
+    let html = `<div style="margin-bottom:16px;font-size:0.9rem;line-height:1.6;">${fb.summary}</div>`;
+
+    // Per-phrase comparison — compact table
+    html += `<div style="font-size:0.75rem;font-weight:600;color:var(--muted);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase;">Сравнение реплик</div>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:16px;">
+      <thead>
+        <tr>
+          <th style="width:28px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);text-align:center;font-weight:600;color:var(--muted);font-size:0.7rem;">№</th>
+          <th style="padding:6px 12px;background:#f0fff8;border:1px solid var(--border);text-align:left;font-weight:600;color:var(--accent3);font-size:0.7rem;">ЭТАЛОН</th>
+          <th style="padding:6px 12px;background:#eef2ff;border:1px solid var(--border);text-align:left;font-weight:600;color:var(--accent);font-size:0.7rem;">СКАЗАНО</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${operatorTurns.map((t, i) => `<tr>
+          <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:0.75rem;">${i+1}</td>
+          <td style="padding:7px 12px;border:1px solid var(--border);color:var(--text);line-height:1.4;">${t.expected}</td>
+          <td style="padding:7px 12px;border:1px solid var(--border);color:${t.actual ? 'var(--text)' : 'var(--accent2)'};line-height:1.4;">${t.actual || '<i>не сказано</i>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+    if (fb.good?.length) {
+      html += `<div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--accent3);letter-spacing:2px;margin:16px 0 8px;">✅ ХОРОШО</div>`;
+      html += fb.good.map(g => `<div style="font-size:0.83rem;margin-bottom:6px;padding-left:12px;border-left:2px solid var(--accent3);">${g}</div>`).join('');
+    }
+    if (fb.improve?.length) {
+      html += `<div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--accent2);letter-spacing:2px;margin:16px 0 8px;">🔧 УЛУЧШИТЬ</div>`;
+      html += fb.improve.map(g => `<div style="font-size:0.83rem;margin-bottom:6px;padding-left:12px;border-left:2px solid var(--accent2);">${g}</div>`).join('');
+    }
+    if (fb.details) {
+      html += `<div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);letter-spacing:2px;margin:16px 0 8px;">📝 ПОДРОБНЫЙ РАЗБОР</div>`;
+      html += `<div style="font-size:0.83rem;line-height:1.7;white-space:pre-wrap;">${fb.details}</div>`;
+    }
+
+    document.getElementById('feedbackText').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('feedbackText').textContent = `Ошибка при генерации обратной связи: ${e.message}`;
+  }
+}
+
+
+
+// ─── Speech Recognition (Web Speech API) ────────────────────────────────────
+let recognition = null;
+let finalTranscript = '';
+let silenceTimer = null;
+
+function toggleRecording() {
+  if (!sessionActive) return;
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+function startRecording() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Используйте Chrome или Edge для распознавания речи.');
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  finalTranscript = '';
+
+  recognition.onstart = () => {
+    isRecording = true;
+    document.getElementById('recordBtn').classList.add('recording');
+    document.getElementById('controlInfo').textContent = 'ГОВОРИТЕ... (нажмите 🎤 чтобы отправить)';
+    setStatus('ЗАПИСЬ', false, true);
+    startVisualizer();
+  };
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript + ' ';
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+    clearTimeout(silenceTimer);
+    if (finalTranscript.trim() || interim.trim()) {
+      silenceTimer = setTimeout(() => {
+        if (isRecording && finalTranscript.trim()) stopRecording();
+      }, 2000);
+    }
+    const preview = (finalTranscript + interim).trim();
+    if (preview) document.getElementById('controlInfo').textContent = '🎤 ' + preview.slice(-80);
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') {
+      if (finalTranscript.trim()) stopRecording();
+      return;
+    }
+    clearTimeout(silenceTimer);
+    stopRecording();
+    addMessage('employee', `⚠ Ошибка микрофона: ${e.error}`, true);
+    document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
+  };
+
+  recognition.onend = () => {
+    if (isRecording && recognition) try { recognition.start(); } catch(e) {}
+  };
+
+  recognition.start();
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  clearTimeout(silenceTimer);
+  const text = finalTranscript.trim();
+  finalTranscript = '';
+  if (recognition) {
+    recognition.onend = null;
+    try { recognition.stop(); } catch(e) {}
+    recognition = null;
+  }
+  document.getElementById('recordBtn').classList.remove('recording');
+  stopVisualizer();
+  setStatus('АКТИВНА', true, false);
+  if (text) {
+    document.getElementById('controlInfo').textContent = 'ОТПРАВЛЯЮ...';
+    getAIResponse(text);
+  } else {
+    document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
+  }
+}
+
+// ─── TTS (Yandex SpeechKit) ──────────────────────────────────────────────────
+let currentAudio = null;
+
+async function speakText(text) {
+  // Stop any playing audio
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+  try {
+    const params = new URLSearchParams({
+      text: text,
+      lang: 'ru-RU',
+      voice: 'alena',       // natural female voice
+      emotion: 'neutral',
+      speed: '1.0',
+      format: 'mp3',
+      sampleRateHertz: '48000',
+    });
+
+    const response = await fetch(
+      `/api/tts`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+      }
+    );
+
+    if (!response.ok) throw new Error(response.statusText);
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    currentAudio = new Audio(audioUrl);
+    currentAudio.play();
+  } catch (e) {
+    // Fallback to browser TTS if SpeechKit fails
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'ru-RU';
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+// ─── UI Helpers ──────────────────────────────────────────────────────────────
+function addMessage(role, text, isError = false) {
+  if (!showTranscript && role === 'client') {
+    // Still add client messages for transcript but show voice icon
+  }
+  const msgs = document.getElementById('messages');
+  // Remove placeholder
+  const ph = msgs.querySelector('.placeholder-msg');
+  if (ph) ph.remove();
+
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const time = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  const avatarIcon = role === 'client' ? '👤' : '🎧';
+
+  const alignItems = role === 'employee' ? 'flex-end' : 'flex-start';
+  div.innerHTML = `
+    <div class="msg-avatar">${avatarIcon}</div>
+    <div style="display:flex;flex-direction:column;align-items:${alignItems};max-width:75%;">
+      <div class="msg-bubble"${isError ? ' style="color:var(--accent2)"' : ''}>${text}</div>
+      <div class="msg-meta">${time}</div>
+    </div>
+  `;
+
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addThinking(id) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'msg client';
+  div.innerHTML = `
+    <div class="msg-avatar">👤</div>
+    <div class="thinking">
+      <span>думает</span>
+      <div class="thinking-dots"><span>.</span><span>.</span><span>.</span></div>
+    </div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeThinking(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+
+function setStatus(text, active, recording) {
+  document.getElementById('statusText').textContent = text;
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot';
+  if (active) dot.classList.add('active');
+  if (recording) dot.classList.add('recording');
+}
+
+function startVisualizer() {
+  stopVisualizer();
+  visualizerInterval = setInterval(() => {
+    barsEl.forEach(bar => {
+      const h = isRecording ? Math.random() * 32 + 4 : 4;
+      bar.style.height = h + 'px';
+      bar.classList.toggle('active', isRecording);
+    });
+  }, 80);
+}
+
+function stopVisualizer() {
+  clearInterval(visualizerInterval);
+  barsEl.forEach(bar => { bar.style.height = '4px'; bar.classList.remove('active'); });
+}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+window.onload = init;
+// Load voices
+window.speechSynthesis.onvoiceschanged = () => {};
+</script>
+
+</body>
+</html>
