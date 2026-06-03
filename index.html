@@ -743,7 +743,7 @@ async function getAIResponse(operatorText) {
 
   if (!matches) {
     // Not matched — client says "didn't hear you", wait for retry
-    const retry = 'Извините, я вас не расслышала.';
+    const retry = 'Кажется, вы ответили не по скрипту. Попробуйте ещё раз.';
     addMessage('client', retry);
     speakText(retry);
     await waitForSpeech(retry);
