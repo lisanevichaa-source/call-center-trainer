@@ -907,9 +907,9 @@ async function generateFeedback() {
 
 
 
-// ─── Speech Recognition (Web Speech API) ────────────────────────────────────
-let recognition = null;
-let finalTranscript = '';
+// ─── Speech Recognition (Yandex SpeechKit STT) ──────────────────────────────
+let mediaRecorder = null;
+let audioChunks = [];
 let silenceTimer = null;
 
 function toggleRecording() {
@@ -921,82 +921,85 @@ function toggleRecording() {
   }
 }
 
-function startRecording() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Используйте Chrome или Edge для распознавания речи.');
-    return;
-  }
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
 
-  recognition = new SpeechRecognition();
-  recognition.lang = 'ru-RU';
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  finalTranscript = '';
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus' : 'audio/webm';
 
-  recognition.onstart = () => {
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const audioBlob = new Blob(audioChunks, { type: mimeType });
+      await recognizeWithYandex(audioBlob);
+    };
+
+    mediaRecorder.start(500);
     isRecording = true;
     document.getElementById('recordBtn').classList.add('recording');
     document.getElementById('controlInfo').textContent = 'ГОВОРИТЕ... (нажмите 🎤 чтобы отправить)';
     setStatus('ЗАПИСЬ', false, true);
     startVisualizer();
-  };
 
-  recognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript + ' ';
+    let silentChunks = 0;
+    mediaRecorder.addEventListener('dataavailable', (e) => {
+      if (e.data.size < 500) {
+        silentChunks++;
+        if (silentChunks >= 5 && audioChunks.length > 2) stopRecording();
       } else {
-        interim += e.results[i][0].transcript;
+        silentChunks = 0;
+        const secs = Math.round(audioChunks.length * 0.5);
+        document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы отправить)`;
       }
-    }
-    clearTimeout(silenceTimer);
-    if (finalTranscript.trim() || interim.trim()) {
-      silenceTimer = setTimeout(() => {
-        if (isRecording && finalTranscript.trim()) stopRecording();
-      }, 2000);
-    }
-    const preview = (finalTranscript + interim).trim();
-    if (preview) document.getElementById('controlInfo').textContent = '🎤 ' + preview.slice(-80);
-  };
+    });
 
-  recognition.onerror = (e) => {
-    if (e.error === 'no-speech') {
-      if (finalTranscript.trim()) stopRecording();
-      return;
-    }
-    clearTimeout(silenceTimer);
-    stopRecording();
-    addMessage('employee', `⚠ Ошибка микрофона: ${e.error}`, true);
-    document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
-  };
-
-  recognition.onend = () => {
-    if (isRecording && recognition) try { recognition.start(); } catch(e) {}
-  };
-
-  recognition.start();
+  } catch(e) {
+    addMessage('employee', `⚠ Нет доступа к микрофону: ${e.message}`, true);
+  }
 }
 
 function stopRecording() {
   if (!isRecording) return;
   isRecording = false;
-  clearTimeout(silenceTimer);
-  const text = finalTranscript.trim();
-  finalTranscript = '';
-  if (recognition) {
-    recognition.onend = null;
-    try { recognition.stop(); } catch(e) {}
-    recognition = null;
-  }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   document.getElementById('recordBtn').classList.remove('recording');
   stopVisualizer();
+  document.getElementById('controlInfo').textContent = 'РАСПОЗНАЮ...';
   setStatus('АКТИВНА', true, false);
-  if (text) {
-    document.getElementById('controlInfo').textContent = 'ОТПРАВЛЯЮ...';
-    getAIResponse(text);
-  } else {
+}
+
+async function recognizeWithYandex(audioBlob) {
+  try {
+    const response = await fetch('/api/stt', {
+      method: 'POST',
+      headers: { 'Content-Type': audioBlob.type },
+      body: audioBlob
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || response.statusText);
+    }
+
+    const data = await response.json();
+    const text = (data.result || '').trim();
+
+    if (text) {
+      document.getElementById('controlInfo').textContent = 'ОТПРАВЛЯЮ...';
+      getAIResponse(text);
+    } else {
+      addMessage('employee', '⚠ Речь не распознана — попробуйте ещё раз', true);
+      document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
+    }
+  } catch(e) {
+    addMessage('employee', `⚠ Ошибка распознавания: ${e.message}`, true);
     document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
   }
 }
