@@ -52,6 +52,12 @@ function proxyRequest(req, res, targetHost, targetPath) {
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url);
 
+  // Healthcheck for Railway
+  if (parsed.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('OK');
+  }
+
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
