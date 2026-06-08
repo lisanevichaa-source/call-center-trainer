@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админ-панель — Голосовой Тренажёр</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f4ff;
+    --surface: #ffffff;
+    --surface2: #f5f7ff;
+    --border: #dde3f5;
+    --accent: #1d5ae8;
+    --accent2: #e8341d;
+    --accent3: #1db87a;
+    --text: #1a1f36;
+    --muted: #7b87a8;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-body: 'IBM Plex Sans', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: linear-gradient(160deg,#ccd8ff 0%,#e8edff 40%,#f5f7ff 100%); font-family: var(--font-body); color: var(--text); min-height: 100vh; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  h1 { font-size: 1.6rem; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 32px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: white; border-radius: 12px; padding: 6px; border: 1px solid var(--border); width: fit-content; box-shadow: 0 2px 12px rgba(29,90,232,0.07); }
+  .tab { padding: 10px 24px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500; border: none; background: none; color: var(--muted); transition: all 0.2s; }
+  .tab.active { background: var(--accent); color: white; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 16px; box-shadow: 0 4px 24px rgba(29,90,232,0.07); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 1rem; font-weight: 600; }
+  .card-desc { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .btn { background: var(--accent); color: white; border: none; border-radius: 10px; font-family: var(--font-body); font-size: 0.82rem; font-weight: 500; padding: 10px 20px; cursor: pointer; transition: all 0.2s; }
+  .btn:hover { background: #4a7ff5; }
+  .btn.danger { background: var(--accent2); }
+  .btn.danger:hover { background: #f04b2e; }
+  .btn.success { background: var(--accent3); }
+  .btn.success:hover { background: #17a06a; }
+  .btn.outline { background: none; border: 1.5px solid var(--border); color: var(--text); }
+  .btn.outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.sm { padding: 6px 14px; font-size: 0.75rem; }
+  .btn-group { display: flex; gap: 8px; }
+  input, textarea, select { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; color: var(--text); font-family: var(--font-body); font-size: 0.85rem; padding: 10px 14px; outline: none; transition: border-color 0.2s; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  label { font-size: 0.75rem; color: var(--muted); font-weight: 500; display: block; margin-bottom: 5px; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { text-align: left; padding: 10px 12px; background: var(--surface2); border-bottom: 2px solid var(--border); font-weight: 600; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+  .badge.high { background: #d6f5e8; color: #1db87a; }
+  .badge.mid { background: #dde8ff; color: var(--accent); }
+  .badge.low { background: #fde8e5; color: var(--accent2); }
+  .phrase-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  .role-toggle { flex-shrink: 0; width: 90px; padding: 8px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 0.7rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; background: none; }
+  .role-toggle.client { background: #dde8ff; color: var(--accent); border-color: rgba(29,90,232,0.2); }
+  .role-toggle.operator { background: #d6f5e8; color: var(--accent3); border-color: rgba(29,184,122,0.2); }
+  .phrase-input { flex: 1; resize: vertical; min-height: 38px; }
+  .phrase-del { flex-shrink: 0; width: 36px; height: 38px; background: none; border: 1.5px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 0.9rem; }
+  .phrase-del:hover { border-color: var(--accent2); color: var(--accent2); }
+  .empty { text-align: center; padding: 48px; color: var(--muted); font-size: 0.85rem; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 16px; width: 800px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h2 { font-size: 1.1rem; font-weight: 600; }
+  .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+  .state-section { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .state-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .state-id-input { width: 180px; font-family: var(--font-mono); font-size: 0.8rem; }
+  .next-state-input { width: 150px; font-family: var(--font-mono); font-size: 0.8rem; }
+  .loading { text-align: center; padding: 32px; color: var(--muted); }
+  .score-cell { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Админ-панель</h1>
+  <p class="subtitle">Управление сценариями и просмотр результатов тренировок</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scenarios')">📋 Сценарии</button>
+    <button class="tab" onclick="switchTab('sessions')">📊 Тренировки</button>
+  </div>
+
+  <!-- Scenarios Panel -->
+  <div id="panel-scenarios" class="panel active">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+      <button class="btn success" onclick="openNewScenario()">+ Новый сценарий</button>
+    </div>
+    <div id="scenariosList"><div class="loading">Загрузка...</div></div>
+  </div>
+
+  <!-- Sessions Panel -->
+  <div id="panel-sessions" class="panel">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+      <a href="/api/sessions/export" class="btn outline" style="text-decoration:none;">⬇ Скачать CSV</a>
+    </div>
+    <div class="card">
+      <div id="sessionsList"><div class="loading">Загрузка...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Scenario Editor Modal -->
+<div class="modal-overlay" id="scenarioModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Новый сценарий</h2>
+      <button class="btn outline sm" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <label>Название сценария</label>
+      <input type="text" id="scName" placeholder="Например: Возврат товара">
+      <label>Описание</label>
+      <input type="text" id="scDesc" placeholder="Краткое описание для оператора">
+      <label>Начальное состояние (ID)</label>
+      <input type="text" id="scStartState" value="start" style="width:200px;font-family:var(--font-mono)">
+
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-weight:600;font-size:0.9rem;">Состояния диалога</div>
+        <button class="btn success sm" onclick="addState()">+ Состояние</button>
+      </div>
+      <p style="font-size:0.75rem;color:var(--muted);margin:6px 0 14px;">Каждое состояние — это шаг диалога. Клиент говорит агентскую фразу, оператор отвечает по шаблону, затем переходим в следующее состояние.</p>
+
+      <div id="statesList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn outline" onclick="closeModal()">Отмена</button>
+      <button class="btn" onclick="saveScenario()">💾 Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session Detail Modal -->
+<div class="modal-overlay" id="sessionModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="sessionModalTitle">Детали тренировки</h2>
+      <button class="btn outline sm" onclick="closeSessionModal()">✕</button>
+    </div>
+    <div class="modal-body" id="sessionModalBody"></div>
+  </div>
+</div>
+
+<script>
+let editingScenarioId = null;
+let scenarios = [];
+let sessions = [];
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['scenarios','sessions'][i] === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'sessions') loadSessions();
+}
+
+// ─── Scenarios ────────────────────────────────────────────────────────────────
+async function loadScenarios() {
+  const res = await fetch('/api/scenarios');
+  scenarios = await res.json();
+  renderScenarios();
+}
+
+function renderScenarios() {
+  const el = document.getElementById('scenariosList');
+  if (!scenarios.length) { el.innerHTML = '<div class="empty">Нет сценариев. Создайте первый!</div>'; return; }
+  el.innerHTML = scenarios.map(s => {
+    const statesCount = Object.keys(s.states || {}).length;
+    return `<div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${s.name}</div>
+          <div class="card-desc">${s.desc || ''} · ${statesCount} состояний</div>
+        </div>
+        <div class="btn-group">
+          <button class="btn outline sm" onclick="editScenario(${s.id})">✏ Редактировать</button>
+          <button class="btn danger sm" onclick="deleteScenario(${s.id}, '${s.name.replace(/'/g, "\\'")}')">🗑 Удалить</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openNewScenario() {
+  editingScenarioId = null;
+  document.getElementById('modalTitle').textContent = 'Новый сценарий';
+  document.getElementById('scName').value = '';
+  document.getElementById('scDesc').value = '';
+  document.getElementById('scStartState').value = 'start';
+  document.getElementById('statesList').innerHTML = '';
+  addState('start');
+  document.getElementById('scenarioModal').classList.add('open');
+}
+
+function editScenario(id) {
+  const s = scenarios.find(x => x.id === id);
+  if (!s) return;
+  editingScenarioId = id;
+  document.getElementById('modalTitle').textContent = 'Редактировать сценарий';
+  document.getElementById('scName').value = s.name;
+  document.getElementById('scDesc').value = s.desc || '';
+  document.getElementById('scStartState').value = s.startState || 'start';
+  const sl = document.getElementById('statesList');
+  sl.innerHTML = '';
+  for (const [stateId, rows] of Object.entries(s.states || {})) {
+    rows.forEach(row => addState(stateId, row));
+  }
+  document.getElementById('scenarioModal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('scenarioModal').classList.remove('open'); }
+
+function addState(stateId = '', row = null) {
+  const sl = document.getElementById('statesList');
+  const div = document.createElement('div');
+  div.className = 'state-section';
+  div.innerHTML = `
+    <div class="state-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:0.72rem;color:var(--muted);font-weight:600;">STATE ID</div>
+        <input type="text" class="state-id-input" value="${stateId}" placeholder="например: start">
+      </div>
+      <button class="btn danger sm" onclick="this.closest('.state-section').remove()">✕ Удалить</button>
+    </div>
+    <label>Фраза клиента (agentSpeech)</label>
+    <textarea class="phrase-input agent-speech" rows="2" placeholder="Что говорит клиент">${row?.agentSpeech || ''}</textarea>
+    <label>Эталонный ответ оператора (intent)</label>
+    <textarea class="phrase-input intent" rows="3" placeholder="Что должен сказать оператор">${row?.intent || ''}</textarea>
+    <label>Следующее состояние (nextState)</label>
+    <input type="text" class="next-state-input" value="${row?.nextState || ''}" placeholder="ID или пусто = конец">
+  `;
+  sl.appendChild(div);
+}
+
+async function saveScenario() {
+  const name = document.getElementById('scName').value.trim();
+  if (!name) { alert('Введите название сценария'); return; }
+
+  const states = {};
+  document.querySelectorAll('.state-section').forEach(section => {
+    const sid = section.querySelector('.state-id-input').value.trim();
+    if (!sid) return;
+    const agentSpeech = section.querySelector('.agent-speech').value.trim();
+    const intent = section.querySelector('.intent').value.trim();
+    const nextStateVal = section.querySelector('.next-state-input').value.trim();
+    if (!states[sid]) states[sid] = [];
+    states[sid].push({ agentSpeech, intent, nextState: nextStateVal || null });
+  });
+
+  const payload = {
+    name,
+    desc: document.getElementById('scDesc').value.trim(),
+    startState: document.getElementById('scStartState').value.trim() || 'start',
+    states
+  };
+
+  const method = editingScenarioId ? 'PUT' : 'POST';
+  const url = editingScenarioId ? `/api/scenarios/${editingScenarioId}` : '/api/scenarios';
+
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  closeModal();
+  await loadScenarios();
+}
+
+async function deleteScenario(id, name) {
+  if (!confirm(`Удалить сценарий "${name}"?`)) return;
+  await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
+  await loadScenarios();
+}
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+async function loadSessions() {
+  const res = await fetch('/api/sessions');
+  sessions = await res.json();
+  renderSessions();
+}
+
+function renderSessions() {
+  const el = document.getElementById('sessionsList');
+  if (!sessions.length) { el.innerHTML = '<div class="empty">Нет записей тренировок</div>'; return; }
+
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Сотрудник</th><th>Сценарий</th><th>Полнота</th><th>Корректность</th><th>Стандарт</th><th>Дата</th><th></th>
+    </tr></thead>
+    <tbody>
+      ${sessions.map(s => `<tr>
+        <td><strong>${s.employee_name}</strong></td>
+        <td>${s.scenario_name || '—'}</td>
+        <td class="score-cell">${scoreBadge(s.score_coverage)}</td>
+        <td class="score-cell">${scoreBadge(s.score_correctness)}</td>
+        <td class="score-cell">${scoreBadge(s.score_standard)}</td>
+        <td style="color:var(--muted);font-size:0.78rem;">${new Date(s.created_at).toLocaleString('ru')}</td>
+        <td><button class="btn outline sm" onclick="showSession(${s.id})">Детали</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function scoreBadge(val) {
+  const cls = val >= 75 ? 'high' : val >= 50 ? 'mid' : 'low';
+  return `<span class="badge ${cls}">${val}%</span>`;
+}
+
+function showSession(id) {
+  const s = sessions.find(x => x.id === id);
+  if (!s) return;
+  const turns = s.turns || [];
+  document.getElementById('sessionModalTitle').textContent = `${s.employee_name} — ${s.scenario_name || 'Сценарий'}`;
+  document.getElementById('sessionModalBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:${s.score_coverage>=75?'#1db87a':s.score_coverage>=50?'#1d5ae8':'#e8341d'}">${s.score_coverage}%</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">ПОЛНОТА</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:${s.score_correctness>=75?'#1db87a':s.score_correctness>=50?'#1d5ae8':'#e8341d'}">${s.score_correctness}%</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">КОРРЕКТНОСТЬ</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:${s.score_standard>=75?'#1db87a':s.score_standard>=50?'#1d5ae8':'#e8341d'}">${s.score_standard}%</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">СТАНДАРТ</div>
+      </div>
+    </div>
+
+    ${s.summary ? `<div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:0.85rem;line-height:1.6;">${s.summary}</div>` : ''}
+
+    <div style="font-weight:600;margin-bottom:10px;">Сравнение реплик</div>
+    <table>
+      <thead><tr>
+        <th style="width:30px;">№</th>
+        <th>Эталон</th>
+        <th>Сказано</th>
+      </tr></thead>
+      <tbody>
+        ${turns.map((t, i) => `<tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td style="color:#1db87a;font-size:0.8rem;">${t.expected || ''}</td>
+          <td style="color:${t.actual?'var(--text)':'var(--accent2)'};font-size:0.8rem;">${t.actual || '<i>не сказано</i>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+
+    ${s.feedback ? `<div style="margin-top:16px;font-weight:600;margin-bottom:8px;">Подробный разбор</div><div style="font-size:0.83rem;line-height:1.7;white-space:pre-wrap;background:var(--surface2);border-radius:10px;padding:14px;">${s.feedback}</div>` : ''}
+  `;
+  document.getElementById('sessionModal').classList.add('open');
+}
+
+function closeSessionModal() { document.getElementById('sessionModal').classList.remove('open'); }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+loadScenarios();
+</script>
+</body>
+</html>

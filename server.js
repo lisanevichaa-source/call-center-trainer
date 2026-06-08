@@ -1,4 +1,50 @@
 const http = require('http');
+const { Pool } = require('pg');
+
+// ─── PostgreSQL ───────────────────────────────────────────────────────────────
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scenarios (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      start_state TEXT NOT NULL DEFAULT 'start',
+      states JSONB NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id SERIAL PRIMARY KEY,
+      employee_name TEXT NOT NULL,
+      scenario_id INTEGER,
+      scenario_name TEXT,
+      score_coverage INTEGER,
+      score_correctness INTEGER,
+      score_standard INTEGER,
+      turns JSONB,
+      feedback TEXT,
+      summary TEXT,
+      good JSONB,
+      improve JSONB,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Seed scenarios from scenarios.json if table is empty
+  const { rows } = await pool.query('SELECT COUNT(*) FROM scenarios');
+  if (parseInt(rows[0].count) === 0) {
+    const scenarios = JSON.parse(fs.readFileSync(__dirname + '/scenarios.json', 'utf8'));
+    for (const s of scenarios) {
+      await pool.query(
+        'INSERT INTO scenarios (name, description, start_state, states) VALUES ($1,$2,$3,$4)',
+        [s.name, s.desc || '', s.startState || 'start', JSON.stringify(s.states)]
+      );
+    }
+    console.log(`✅ Загружено ${scenarios.length} сценариев из scenarios.json`);
+  }
+  console.log('✅ База данных готова');
+}
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -49,7 +95,7 @@ function proxyRequest(req, res, targetHost, targetPath) {
   });
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url);
 
   // Healthcheck for Railway
@@ -160,8 +206,87 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+
+  // ── Scenarios API ──────────────────────────────────────────────────────────
+  if (parsed.pathname === '/api/scenarios' && req.method === 'GET') {
+    try {
+      const { rows } = await pool.query('SELECT * FROM scenarios ORDER BY id');
+      const scenarios = rows.map(r => ({ id: r.id, name: r.name, desc: r.description, startState: r.start_state, states: r.states }));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify(scenarios));
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
+  if (parsed.pathname === '/api/scenarios' && req.method === 'POST') {
+    const body = []; req.on('data', c => body.push(c));
+    req.on('end', async () => {
+      try {
+        const s = JSON.parse(Buffer.concat(body).toString());
+        const { rows } = await pool.query('INSERT INTO scenarios (name, description, start_state, states) VALUES ($1,$2,$3,$4) RETURNING *', [s.name, s.desc||'', s.startState||'start', JSON.stringify(s.states)]);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify(rows[0]));
+      } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
+    }); return;
+  }
+
+  const scenarioMatch = parsed.pathname.match(/^\/api\/scenarios\/(\d+)$/);
+  if (scenarioMatch && req.method === 'PUT') {
+    const body = []; req.on('data', c => body.push(c));
+    req.on('end', async () => {
+      try {
+        const s = JSON.parse(Buffer.concat(body).toString());
+        await pool.query('UPDATE scenarios SET name=$1, description=$2, start_state=$3, states=$4 WHERE id=$5', [s.name, s.desc||'', s.startState||'start', JSON.stringify(s.states), scenarioMatch[1]]);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
+    }); return;
+  }
+
+  if (scenarioMatch && req.method === 'DELETE') {
+    try {
+      await pool.query('DELETE FROM scenarios WHERE id=$1', [scenarioMatch[1]]);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
+  // ── Sessions API ───────────────────────────────────────────────────────────
+  if (parsed.pathname === '/api/sessions' && req.method === 'POST') {
+    const body = []; req.on('data', c => body.push(c));
+    req.on('end', async () => {
+      try {
+        const s = JSON.parse(Buffer.concat(body).toString());
+        await pool.query(
+          'INSERT INTO sessions (employee_name,scenario_id,scenario_name,score_coverage,score_correctness,score_standard,turns,feedback,summary,good,improve) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+          [s.employeeName, s.scenarioId||null, s.scenarioName, s.coverage, s.correctness, s.standard, JSON.stringify(s.turns), s.details||'', s.summary||'', JSON.stringify(s.good||[]), JSON.stringify(s.improve||[])]
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
+    }); return;
+  }
+
+  if (parsed.pathname === '/api/sessions' && req.method === 'GET') {
+    try {
+      const { rows } = await pool.query('SELECT * FROM sessions ORDER BY created_at DESC');
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify(rows));
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
+  if (parsed.pathname === '/api/sessions/export' && req.method === 'GET') {
+    try {
+      const { rows } = await pool.query('SELECT * FROM sessions ORDER BY created_at DESC');
+      const headers = ['ID','Сотрудник','Сценарий','Полнота %','Корректность %','Стандарт %','Дата'];
+      const lines = [headers.join(';'), ...rows.map(r => [r.id, '"'+r.employee_name+'"', '"'+(r.scenario_name||'')+'"', r.score_coverage, r.score_correctness, r.score_standard, new Date(r.created_at).toLocaleString('ru')].join(';'))];
+      const csv = lines.join('\n');
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="sessions.csv"', 'Access-Control-Allow-Origin': '*' });
+      return res.end('\ufeff' + csv);
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
   // Static files
-  let filePath = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
+  let filePath = parsed.pathname === '/' ? '/index.html' : parsed.pathname === '/admin' ? '/admin.html' : parsed.pathname;
   filePath = path.join(__dirname, filePath);
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
@@ -171,6 +296,8 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 });
+
+initDB().catch(e => console.error('DB init error:', e));
 
 server.listen(PORT, () => {
   console.log(`✅ Сервер запущен: http://localhost:${PORT}`);

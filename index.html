@@ -543,6 +543,10 @@
         </div>
         <div class="panel-body">
           <div class="scenario-select" id="scenarioList"></div>
+          <div style="margin-bottom:16px;">
+            <div style="font-size:0.75rem;color:var(--muted);font-weight:500;margin-bottom:6px;">Ваше имя</div>
+            <input type="text" id="employeeName" placeholder="Введите имя..." style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font-body);font-size:0.85rem;padding:10px 14px;outline:none;">
+          </div>
           <div class="session-controls">
             <button class="btn success" id="startBtn" onclick="startSession()">▶ Начать сессию</button>
             <button class="btn danger" id="endBtn" onclick="endSession()" disabled>■ Завершить</button>
@@ -595,11 +599,11 @@ let SCENARIOS = [];
 
 async function loadScenarios() {
   try {
-    const res = await fetch('/scenarios.json?t=' + Date.now());
+    const res = await fetch('/api/scenarios');
     ALL_SCENARIOS = await res.json();
     SCENARIOS = ALL_SCENARIOS;
   } catch(e) {
-    console.error('Не удалось загрузить scenarios.json:', e);
+    console.error('Не удалось загрузить сценарии:', e);
   }
 }
 
@@ -667,6 +671,13 @@ let operatorTurns = [];       // {expected, actual}
 
 async function startSession() {
   if (!currentScenario) return;
+  const empName = document.getElementById('employeeName').value.trim();
+  if (!empName) {
+    document.getElementById('employeeName').style.borderColor = 'var(--accent2)';
+    document.getElementById('employeeName').placeholder = 'Введите имя перед началом!';
+    return;
+  }
+  document.getElementById('employeeName').style.borderColor = '';
   sessionActive = true;
   conversationHistory = [];
   operatorTurns = [];
@@ -899,6 +910,29 @@ async function generateFeedback() {
     }
 
     document.getElementById('feedbackText').innerHTML = html;
+
+    // Save session to DB
+    try {
+      const empName = document.getElementById('employeeName').value.trim() || 'Неизвестный';
+      await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeName: empName,
+          scenarioId: currentScenario?.id || null,
+          scenarioName: currentScenario?.name || '',
+          coverage: fb.coverage,
+          correctness: fb.correctness,
+          standard: fb.standard,
+          turns: operatorTurns,
+          summary: fb.summary || '',
+          details: fb.details || '',
+          good: fb.good || [],
+          improve: fb.improve || []
+        })
+      });
+    } catch(saveErr) { console.error('Ошибка сохранения сессии:', saveErr); }
+
 
   } catch (e) {
     document.getElementById('feedbackText').textContent = `Ошибка при генерации обратной связи: ${e.message}`;
