@@ -70,10 +70,19 @@
   .modal-header h2 { font-size: 1.1rem; font-weight: 600; }
   .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
   .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
-  .state-section { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
-  .state-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .state-id-input { width: 180px; font-family: var(--font-mono); font-size: 0.8rem; }
-  .next-state-input { width: 150px; font-family: var(--font-mono); font-size: 0.8rem; }
+  .states-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .states-table th { background: var(--surface2); border: 1px solid var(--border); padding: 8px 10px; text-align: left; font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+  .states-table td { border: 1px solid var(--border); padding: 6px 8px; vertical-align: top; }
+  .states-table tr:hover td { background: #f8f9ff; }
+  .states-table textarea, .states-table input[type=text] { border: none; background: none; padding: 4px; font-size: 0.82rem; resize: vertical; min-height: 32px; border-radius: 4px; }
+  .states-table textarea:focus, .states-table input[type=text]:focus { background: white; border: 1px solid var(--accent); outline: none; }
+  .state-id-input { width: 100%; font-family: var(--font-mono); font-size: 0.78rem; }
+  .next-state-input { width: 100%; font-family: var(--font-mono); font-size: 0.78rem; }
+  .col-state-id { width: 110px; }
+  .col-agent { width: 28%; }
+  .col-intent { width: 40%; }
+  .col-next { width: 100px; }
+  .col-del { width: 40px; text-align: center; }
   .loading { text-align: center; padding: 32px; color: var(--muted); }
   .score-cell { font-weight: 600; }
 </style>
@@ -122,13 +131,24 @@
       <label>Начальное состояние (ID)</label>
       <input type="text" id="scStartState" value="start" style="width:200px;font-family:var(--font-mono)">
 
-      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div style="font-weight:600;font-size:0.9rem;">Состояния диалога</div>
-        <button class="btn success sm" onclick="addState()">+ Состояние</button>
+        <button class="btn success sm" onclick="addState()">+ Строка</button>
       </div>
-      <p style="font-size:0.75rem;color:var(--muted);margin:6px 0 14px;">Каждое состояние — это шаг диалога. Клиент говорит агентскую фразу, оператор отвечает по шаблону, затем переходим в следующее состояние.</p>
-
-      <div id="statesList"></div>
+      <div style="overflow-x:auto;">
+        <table class="states-table">
+          <thead>
+            <tr>
+              <th class="col-state-id">State ID</th>
+              <th class="col-agent">Agent Speech (фраза клиента)</th>
+              <th class="col-intent">Intent (эталон оператора)</th>
+              <th class="col-next">Next State</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="statesList"></tbody>
+        </table>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn outline" onclick="closeModal()">Отмена</button>
@@ -219,24 +239,15 @@ function closeModal() { document.getElementById('scenarioModal').classList.remov
 
 function addState(stateId = '', row = null) {
   const sl = document.getElementById('statesList');
-  const div = document.createElement('div');
-  div.className = 'state-section';
-  div.innerHTML = `
-    <div class="state-header">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="font-size:0.72rem;color:var(--muted);font-weight:600;">STATE ID</div>
-        <input type="text" class="state-id-input" value="${stateId}" placeholder="например: start">
-      </div>
-      <button class="btn danger sm" onclick="this.closest('.state-section').remove()">✕ Удалить</button>
-    </div>
-    <label>Фраза клиента (agentSpeech)</label>
-    <textarea class="phrase-input agent-speech" rows="2" placeholder="Что говорит клиент">${row?.agentSpeech || ''}</textarea>
-    <label>Эталонный ответ оператора (intent)</label>
-    <textarea class="phrase-input intent" rows="3" placeholder="Что должен сказать оператор">${row?.intent || ''}</textarea>
-    <label>Следующее состояние (nextState)</label>
-    <input type="text" class="next-state-input" value="${row?.nextState || ''}" placeholder="ID или пусто = конец">
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="col-state-id"><input type="text" class="state-id-input" value="${stateId}" placeholder="start"></td>
+    <td class="col-agent"><textarea class="agent-speech" rows="2" placeholder="Фраза клиента">${row?.agentSpeech || ''}</textarea></td>
+    <td class="col-intent"><textarea class="intent" rows="2" placeholder="Эталон ответа оператора">${row?.intent || ''}</textarea></td>
+    <td class="col-next"><input type="text" class="next-state-input" value="${row?.nextState || ''}" placeholder="или пусто"></td>
+    <td class="col-del"><button class="phrase-del" onclick="this.closest('tr').remove()" title="Удалить">✕</button></td>
   `;
-  sl.appendChild(div);
+  sl.appendChild(tr);
 }
 
 async function saveScenario() {
@@ -244,12 +255,12 @@ async function saveScenario() {
   if (!name) { alert('Введите название сценария'); return; }
 
   const states = {};
-  document.querySelectorAll('.state-section').forEach(section => {
-    const sid = section.querySelector('.state-id-input').value.trim();
+  document.querySelectorAll('#statesList tr').forEach(row => {
+    const sid = row.querySelector('.state-id-input').value.trim();
     if (!sid) return;
-    const agentSpeech = section.querySelector('.agent-speech').value.trim();
-    const intent = section.querySelector('.intent').value.trim();
-    const nextStateVal = section.querySelector('.next-state-input').value.trim();
+    const agentSpeech = row.querySelector('.agent-speech').value.trim();
+    const intent = row.querySelector('.intent').value.trim();
+    const nextStateVal = row.querySelector('.next-state-input').value.trim();
     if (!states[sid]) states[sid] = [];
     states[sid].push({ agentSpeech, intent, nextState: nextStateVal || null });
   });
