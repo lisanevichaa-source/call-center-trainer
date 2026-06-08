@@ -1,7 +1,4 @@
 const http = require('http');
-const { spawn } = require('child_process');
-const os = require('os');
-const crypto = require('crypto');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -98,63 +95,31 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // SpeechKit STT — convert webm to ogg/opus via ffmpeg then send to Yandex
+  // SpeechKit STT — proxy raw audio to Yandex (PCM format from browser)
   if (parsed.pathname === '/api/stt') {
     const body2 = [];
     req.on('data', chunk => body2.push(chunk));
-    req.on('end', async () => {
-      const inputBuf = Buffer.concat(body2);
-      const tmpId  = crypto.randomBytes(8).toString('hex');
-      const tmpIn  = `${os.tmpdir()}/stt_in_${tmpId}.webm`;
-      const tmpOut = `${os.tmpdir()}/stt_out_${tmpId}.ogg`;
-
-      try {
-        fs.writeFileSync(tmpIn, inputBuf);
-
-        await new Promise((resolve, reject) => {
-          const ff = spawn('ffmpeg', [
-            '-y', '-i', tmpIn,
-            '-c:a', 'libopus',
-            '-b:a', '48k',
-            '-ar', '48000',
-            '-ac', '1',
-            tmpOut
-          ]);
-          ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg error: ' + code)));
-          ff.on('error', reject);
-        });
-
-        const oggBuf = fs.readFileSync(tmpOut);
-        const sttPath = '/speech/v1/stt:recognize?lang=ru-RU&format=oggopus&sampleRateHertz=48000&profanityFilter=false';
-
-        const opts2 = {
-          hostname: 'stt.api.cloud.yandex.net',
-          path: sttPath,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'audio/ogg',
-            'Authorization': `Api-Key ${API_KEY_SPEECH}`,
-            'x-folder-id': FOLDER_ID,
-            'Content-Length': oggBuf.length
-          }
-        };
-
-        const pr2 = https.request(opts2, (r2) => {
-          res.writeHead(r2.statusCode, { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' });
-          r2.pipe(res);
-        });
-        pr2.on('error', (e) => { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); });
-        pr2.write(oggBuf);
-        pr2.end();
-
-      } catch(e) {
-        console.error('STT error:', e.message);
-        res.writeHead(500, { 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ error: e.message }));
-      } finally {
-        try { fs.unlinkSync(tmpIn); } catch(_) {}
-        try { fs.unlinkSync(tmpOut); } catch(_) {}
-      }
+    req.on('end', () => {
+      const bodyData2 = Buffer.concat(body2);
+      const sttPath = '/speech/v1/stt:recognize?lang=ru-RU&format=lpcm&sampleRateHertz=16000&profanityFilter=false';
+      const opts2 = {
+        hostname: 'stt.api.cloud.yandex.net',
+        path: sttPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Authorization': `Api-Key ${API_KEY_SPEECH}`,
+          'x-folder-id': FOLDER_ID,
+          'Content-Length': bodyData2.length
+        }
+      };
+      const pr2 = https.request(opts2, (r2) => {
+        res.writeHead(r2.statusCode, { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' });
+        r2.pipe(res);
+      });
+      pr2.on('error', (e) => { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); });
+      pr2.write(bodyData2);
+      pr2.end();
     });
     return;
   }

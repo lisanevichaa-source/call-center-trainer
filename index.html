@@ -921,44 +921,57 @@ function toggleRecording() {
   }
 }
 
+let audioContext = null;
+let audioProcessor = null;
+let audioStream = null;
+let pcmChunks = [];
+let silenceCounter = 0;
+let hasVoice = false;
+
 async function startRecording() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(audioStream);
+    audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    pcmChunks = [];
+    silenceCounter = 0;
+    hasVoice = false;
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus' : 'audio/webm';
+    audioProcessor.onaudioprocess = (e) => {
+      if (!isRecording) return;
+      const inputData = e.inputBuffer.getChannelData(0);
+      // Convert float32 to int16 PCM
+      const pcm = new Int16Array(inputData.length);
+      let maxAmp = 0;
+      for (let i = 0; i < inputData.length; i++) {
+        pcm[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+        maxAmp = Math.max(maxAmp, Math.abs(inputData[i]));
+      }
+      pcmChunks.push(pcm.buffer.slice(0));
 
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // Silence detection
+      if (maxAmp > 0.01) {
+        hasVoice = true;
+        silenceCounter = 0;
+      } else if (hasVoice) {
+        silenceCounter++;
+        // ~2.5 sec silence at 16000Hz / 4096 samples ≈ 10 chunks
+        if (silenceCounter > 10) stopRecording();
+      }
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
+      const secs = Math.round(pcmChunks.length * 4096 / 16000);
+      if (secs > 0) document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы отправить)`;
     };
 
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const audioBlob = new Blob(audioChunks, { type: mimeType });
-      await recognizeWithYandex(audioBlob);
-    };
+    source.connect(audioProcessor);
+    audioProcessor.connect(audioContext.destination);
 
-    mediaRecorder.start(500);
     isRecording = true;
     document.getElementById('recordBtn').classList.add('recording');
     document.getElementById('controlInfo').textContent = 'ГОВОРИТЕ... (нажмите 🎤 чтобы отправить)';
     setStatus('ЗАПИСЬ', false, true);
     startVisualizer();
-
-    let silentChunks = 0;
-    mediaRecorder.addEventListener('dataavailable', (e) => {
-      if (e.data.size < 500) {
-        silentChunks++;
-        if (silentChunks >= 5 && audioChunks.length > 2) stopRecording();
-      } else {
-        silentChunks = 0;
-        const secs = Math.round(audioChunks.length * 0.5);
-        document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы отправить)`;
-      }
-    });
 
   } catch(e) {
     addMessage('employee', `⚠ Нет доступа к микрофону: ${e.message}`, true);
@@ -968,24 +981,43 @@ async function startRecording() {
 function stopRecording() {
   if (!isRecording) return;
   isRecording = false;
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+
+  if (audioProcessor) { audioProcessor.disconnect(); audioProcessor = null; }
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
+
   document.getElementById('recordBtn').classList.remove('recording');
   stopVisualizer();
   document.getElementById('controlInfo').textContent = 'РАСПОЗНАЮ...';
   setStatus('АКТИВНА', true, false);
+
+  if (pcmChunks.length > 0 && hasVoice) {
+    recognizeWithYandex();
+  } else {
+    document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
+  }
 }
 
-async function recognizeWithYandex(audioBlob) {
+async function recognizeWithYandex() {
   try {
+    // Merge all PCM chunks into one buffer
+    const totalLen = pcmChunks.reduce((a, b) => a + b.byteLength, 0);
+    const merged = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const chunk of pcmChunks) {
+      merged.set(new Uint8Array(chunk), offset);
+      offset += chunk.byteLength;
+    }
+
     const response = await fetch('/api/stt', {
       method: 'POST',
-      headers: { 'Content-Type': audioBlob.type },
-      body: audioBlob
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: merged
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || response.statusText);
+      throw new Error(err.error_message || err.error || response.statusText);
     }
 
     const data = await response.json();
