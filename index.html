@@ -930,8 +930,10 @@ let hasVoice = false;
 
 async function startRecording() {
   try {
-    audioStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+    // Use browser's native sample rate, resample to 16000 manually
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const nativeSampleRate = audioContext.sampleRate;
     const source = audioContext.createMediaStreamSource(audioStream);
     audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
     pcmChunks = [];
@@ -941,12 +943,22 @@ async function startRecording() {
     audioProcessor.onaudioprocess = (e) => {
       if (!isRecording) return;
       const inputData = e.inputBuffer.getChannelData(0);
+
+      // Resample from native rate to 16000Hz
+      const targetRate = 16000;
+      const ratio = nativeSampleRate / targetRate;
+      const outLength = Math.round(inputData.length / ratio);
+      const resampled = new Float32Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        resampled[i] = inputData[Math.min(Math.round(i * ratio), inputData.length - 1)];
+      }
+
       // Convert float32 to int16 PCM
-      const pcm = new Int16Array(inputData.length);
+      const pcm = new Int16Array(resampled.length);
       let maxAmp = 0;
-      for (let i = 0; i < inputData.length; i++) {
-        pcm[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-        maxAmp = Math.max(maxAmp, Math.abs(inputData[i]));
+      for (let i = 0; i < resampled.length; i++) {
+        pcm[i] = Math.max(-32768, Math.min(32767, resampled[i] * 32768));
+        maxAmp = Math.max(maxAmp, Math.abs(resampled[i]));
       }
       pcmChunks.push(pcm.buffer.slice(0));
 
@@ -956,11 +968,10 @@ async function startRecording() {
         silenceCounter = 0;
       } else if (hasVoice) {
         silenceCounter++;
-        // ~2.5 sec silence at 16000Hz / 4096 samples ≈ 10 chunks
         if (silenceCounter > 10) stopRecording();
       }
 
-      const secs = Math.round(pcmChunks.length * 4096 / 16000);
+      const secs = Math.round(pcmChunks.length * outLength / targetRate);
       if (secs > 0) document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы отправить)`;
     };
 
