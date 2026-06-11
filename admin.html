@@ -183,29 +183,53 @@ function switchTab(tab) {
 
 // ─── Scenarios ────────────────────────────────────────────────────────────────
 async function loadScenarios() {
-  const res = await fetch('/api/scenarios');
+  const res = await fetch('/api/scenarios/all');
   scenarios = await res.json();
   renderScenarios();
 }
 
 function renderScenarios() {
   const el = document.getElementById('scenariosList');
-  if (!scenarios.length) { el.innerHTML = '<div class="empty">Нет сценариев. Создайте первый!</div>'; return; }
-  el.innerHTML = scenarios.map(s => {
+  const active = scenarios.filter(s => !s.archived);
+  const archived = scenarios.filter(s => s.archived);
+
+  function scenarioCard(s, isArchived) {
     const statesCount = Object.keys(s.states || {}).length;
-    return `<div class="card">
+    const safeName = s.name.replace(/'/g, "\\'");
+    return `<div class="card" style="${isArchived ? 'opacity:0.65;' : ''}">
       <div class="card-header">
         <div>
           <div class="card-title">${s.name}</div>
           <div class="card-desc">${s.desc || ''} · ${statesCount} состояний</div>
         </div>
         <div class="btn-group">
-          <button class="btn outline sm" onclick="editScenario(${s.id})">✏ Редактировать</button>
-          <button class="btn danger sm" onclick="deleteScenario(${s.id}, '${s.name.replace(/'/g, "\\'")}')">🗑 Удалить</button>
+          ${!isArchived ? `<button class="btn outline sm" onclick="editScenario(${s.id})">✏ Редактировать</button>` : ''}
+          ${!isArchived
+            ? `<button class="btn danger sm" onclick="archiveScenario(${s.id}, '${safeName}')">📦 В архив</button>`
+            : `<button class="btn success sm" onclick="unarchiveScenario(${s.id}, '${safeName}')">↩ Из архива</button>`
+          }
         </div>
       </div>
     </div>`;
-  }).join('');
+  }
+
+  if (!active.length && !archived.length) {
+    el.innerHTML = '<div class="empty">Нет сценариев. Создайте первый!</div>';
+    return;
+  }
+
+  let html = active.map(s => scenarioCard(s, false)).join('');
+
+  if (archived.length) {
+    html += `<div style="display:flex;align-items:center;gap:12px;margin:28px 0 16px;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <div style="font-size:0.72rem;color:var(--muted);font-weight:600;letter-spacing:1px;white-space:nowrap;">АРХИВ · ${archived.length}</div>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>`;
+    html += archived.map(s => scenarioCard(s, true)).join('');
+  }
+
+  el.innerHTML = html;
 }
 
 function openNewScenario() {
@@ -280,9 +304,15 @@ async function saveScenario() {
   await loadScenarios();
 }
 
-async function deleteScenario(id, name) {
-  if (!confirm(`Удалить сценарий "${name}"?`)) return;
+async function archiveScenario(id, name) {
+  if (!confirm(`Переместить сценарий "${name}" в архив?`)) return;
   await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
+  await loadScenarios();
+}
+
+async function unarchiveScenario(id, name) {
+  if (!confirm(`Восстановить сценарий "${name}" из архива?`)) return;
+  await fetch(`/api/scenarios/${id}/unarchive`, { method: 'POST' });
   await loadScenarios();
 }
 

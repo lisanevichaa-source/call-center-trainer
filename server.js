@@ -12,8 +12,11 @@ async function initDB() {
       description TEXT,
       start_state TEXT NOT NULL DEFAULT 'start',
       states JSONB NOT NULL,
+      archived BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT NOW()
     );
+    -- Add archived column if upgrading from old schema
+    ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE;
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
       employee_name TEXT NOT NULL,
@@ -210,7 +213,7 @@ const server = http.createServer(async (req, res) => {
   // ── Scenarios API ──────────────────────────────────────────────────────────
   if (parsed.pathname === '/api/scenarios' && req.method === 'GET') {
     try {
-      const { rows } = await pool.query('SELECT * FROM scenarios ORDER BY id');
+      const { rows } = await pool.query('SELECT * FROM scenarios WHERE archived = FALSE ORDER BY id');
       const scenarios = rows.map(r => ({ id: r.id, name: r.name, desc: r.description, startState: r.start_state, states: r.states }));
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify(scenarios));
@@ -243,10 +246,31 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (scenarioMatch && req.method === 'DELETE') {
+    // Archive instead of delete
     try {
-      await pool.query('DELETE FROM scenarios WHERE id=$1', [scenarioMatch[1]]);
+      await pool.query('UPDATE scenarios SET archived = TRUE WHERE id=$1', [scenarioMatch[1]]);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify({ ok: true }));
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
+  // Unarchive scenario
+  const unarchiveMatch = parsed.pathname.match(/^\/api\/scenarios\/(\d+)\/unarchive$/);
+  if (unarchiveMatch && req.method === 'POST') {
+    try {
+      await pool.query('UPDATE scenarios SET archived = FALSE WHERE id=$1', [unarchiveMatch[1]]);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+  }
+
+  // GET all scenarios including archived (for admin)
+  if (parsed.pathname === '/api/scenarios/all' && req.method === 'GET') {
+    try {
+      const { rows } = await pool.query('SELECT * FROM scenarios ORDER BY archived, id');
+      const scenarios = rows.map(r => ({ id: r.id, name: r.name, desc: r.description, startState: r.start_state, states: r.states, archived: r.archived }));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify(scenarios));
     } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
   }
 
