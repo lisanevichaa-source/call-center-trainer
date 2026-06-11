@@ -301,10 +301,19 @@ const server = http.createServer(async (req, res) => {
   if (parsed.pathname === '/api/sessions/export' && req.method === 'GET') {
     try {
       const { rows } = await pool.query('SELECT * FROM sessions ORDER BY created_at DESC');
+      const SEP = '\t';
+      const esc = v => String(v ?? '').replace(/\t/g, ' ');
       const headers = ['ID','Сотрудник','Сценарий','Полнота %','Корректность %','Стандарт %','Дата'];
-      const lines = [headers.join(';'), ...rows.map(r => [r.id, '"'+r.employee_name+'"', '"'+(r.scenario_name||'')+'"', r.score_coverage, r.score_correctness, r.score_standard, new Date(r.created_at).toLocaleString('ru')].join(';'))];
+      const lines = [
+        headers.join(SEP),
+        ...rows.map(r => [
+          r.id, esc(r.employee_name), esc(r.scenario_name),
+          r.score_coverage, r.score_correctness, r.score_standard,
+          new Date(r.created_at).toLocaleString('ru')
+        ].join(SEP))
+      ];
       const csv = lines.join('\n');
-      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="sessions.csv"', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(200, { 'Content-Type': 'text/tab-separated-values; charset=utf-8', 'Content-Disposition': 'attachment; filename="sessions.tsv"', 'Access-Control-Allow-Origin': '*' });
       return res.end('\ufeff' + csv);
     } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
   }
