@@ -1,5 +1,6 @@
 const http = require('http');
 const { Pool } = require('pg');
+const ExcelJS = require('exceljs');
 
 // ─── PostgreSQL ───────────────────────────────────────────────────────────────
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -301,21 +302,55 @@ const server = http.createServer(async (req, res) => {
   if (parsed.pathname === '/api/sessions/export' && req.method === 'GET') {
     try {
       const { rows } = await pool.query('SELECT * FROM sessions ORDER BY created_at DESC');
-      const SEP = '\t';
-      const esc = v => String(v ?? '').replace(/\t/g, ' ');
-      const headers = ['ID','Сотрудник','Сценарий','Полнота %','Корректность %','Стандарт %','Дата'];
-      const lines = [
-        headers.join(SEP),
-        ...rows.map(r => [
-          r.id, esc(r.employee_name), esc(r.scenario_name),
-          r.score_coverage, r.score_correctness, r.score_standard,
-          new Date(r.created_at).toLocaleString('ru')
-        ].join(SEP))
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Тренировки');
+
+      ws.columns = [
+        { header: 'ID',            key: 'id',         width: 6  },
+        { header: 'Сотрудник',     key: 'employee',   width: 20 },
+        { header: 'Сценарий',      key: 'scenario',   width: 30 },
+        { header: 'Полнота %',     key: 'coverage',   width: 12 },
+        { header: 'Корректность %',key: 'correctness',width: 16 },
+        { header: 'Стандарт %',    key: 'standard',   width: 12 },
+        { header: 'Дата',          key: 'date',        width: 20 },
       ];
-      const csv = lines.join('\n');
-      res.writeHead(200, { 'Content-Type': 'text/tab-separated-values; charset=utf-8', 'Content-Disposition': 'attachment; filename="sessions.tsv"', 'Access-Control-Allow-Origin': '*' });
-      return res.end('\ufeff' + csv);
-    } catch(e) { res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
+
+      // Style header row
+      ws.getRow(1).font = { bold: true };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EDFF' } };
+
+      rows.forEach(r => {
+        ws.addRow({
+          id: r.id,
+          employee: r.employee_name,
+          scenario: r.scenario_name || '',
+          coverage: r.score_coverage,
+          correctness: r.score_correctness,
+          standard: r.score_standard,
+          date: new Date(r.created_at).toLocaleString('ru')
+        });
+      });
+
+      // Color score cells
+      ws.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        ['coverage','correctness','standard'].forEach(key => {
+          const cell = row.getCell(key);
+          const val = cell.value;
+          if (val >= 75) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6F5E8' } };
+          else if (val >= 50) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDE8FF' } };
+          else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE8E5' } };
+        });
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="sessions.xlsx"',
+        'Access-Control-Allow-Origin': '*'
+      });
+      return res.end(Buffer.from(buffer));
+    } catch(e) { console.error('Export error:', e); res.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify({ error: e.message })); }
   }
 
   // Static files
