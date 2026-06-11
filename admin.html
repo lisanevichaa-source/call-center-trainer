@@ -85,6 +85,13 @@
   .col-del { width: 40px; text-align: center; }
   .loading { text-align: center; padding: 32px; color: var(--muted); }
   .score-cell { font-weight: 600; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printArea, #printArea * { visibility: visible; }
+    #printArea { position: fixed; inset: 0; padding: 24px; background: white; }
+    .no-print { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -165,6 +172,10 @@
       <button class="btn outline sm" onclick="closeSessionModal()">✕</button>
     </div>
     <div class="modal-body" id="sessionModalBody"></div>
+    <div class="modal-footer no-print">
+      <button class="btn outline" onclick="printSession()">🖨 Печать / PDF</button>
+      <button class="btn outline" onclick="closeSessionModal()">Закрыть</button>
+    </div>
   </div>
 </div>
 
@@ -396,8 +407,17 @@ function showSession(id) {
 
 function closeSessionModal() { document.getElementById('sessionModal').classList.remove('open'); }
 
+function printSession() {
+  const body = document.getElementById('sessionModalBody').innerHTML;
+  const title = document.getElementById('sessionModalTitle').textContent;
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = `<h2 style="margin-bottom:16px;color:#1d5ae8;">${title}</h2>` + body;
+  window.print();
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 loadScenarios();
 </script>
+<div id="printArea" style="display:none;"></div>
 </body>
 </html>
