@@ -89,7 +89,7 @@
   @media print {
     body * { visibility: hidden; }
     #printArea, #printArea * { visibility: visible; }
-    #printArea { position: fixed; inset: 0; padding: 24px; background: white; }
+    #printArea { display: block !important; position: fixed; inset: 0; padding: 24px; background: white; overflow: visible; }
     .no-print { display: none !important; }
   }
 </style>
