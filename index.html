@@ -667,7 +667,8 @@ function selectScenario(i) {
 // ─── Session (state machine) ────────────────────────────────────────────────
 let currentStateId = 'start';
 let currentStateRow = null;   // chosen row for current state
-let operatorTurns = [];       // {expected, actual}
+let operatorTurns = [];       // {expected, actual, responseTime}
+let responseStartTime = null;
 
 async function startSession() {
   if (!currentScenario) return;
@@ -719,6 +720,7 @@ async function advanceState() {
   // Enable mic for operator response
   document.getElementById('recordBtn').disabled = false;
   document.getElementById('controlInfo').textContent = 'ВАШ ОТВЕТ: нажмите 🎤';
+  responseStartTime = Date.now();
 }
 
 function waitForSpeech(text) {
@@ -760,11 +762,14 @@ async function getAIResponse(operatorText) {
     await waitForSpeech(retry);
     document.getElementById('recordBtn').disabled = false;
     document.getElementById('controlInfo').textContent = 'ПОПРОБУЙТЕ ЕЩЁ РАЗ: нажмите 🎤';
+    responseStartTime = Date.now();
     return;
   }
 
   // Matched — save turn and move to next state
-  operatorTurns.push({ expected, actual: operatorText, stateId: currentStateId });
+  const responseTime = responseStartTime ? Math.round((Date.now() - responseStartTime) / 1000) : null;
+  responseStartTime = null;
+  operatorTurns.push({ expected, actual: operatorText, stateId: currentStateId, responseTime });
   const nextStateId = currentStateRow.nextState;
 
   if (!nextStateId) {
@@ -885,6 +890,7 @@ async function generateFeedback() {
           <th style="width:28px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);text-align:center;font-weight:600;color:var(--muted);font-size:0.7rem;">№</th>
           <th style="padding:6px 12px;background:#f0fff8;border:1px solid var(--border);text-align:left;font-weight:600;color:var(--accent3);font-size:0.7rem;">ЭТАЛОН</th>
           <th style="padding:6px 12px;background:#eef2ff;border:1px solid var(--border);text-align:left;font-weight:600;color:var(--accent);font-size:0.7rem;">СКАЗАНО</th>
+          <th style="width:80px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);text-align:center;font-weight:600;color:var(--muted);font-size:0.7rem;">⏱ СЕК</th>
         </tr>
       </thead>
       <tbody>
@@ -892,6 +898,7 @@ async function generateFeedback() {
           <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:0.75rem;">${i+1}</td>
           <td style="padding:7px 12px;border:1px solid var(--border);color:var(--text);line-height:1.4;">${t.expected}</td>
           <td style="padding:7px 12px;border:1px solid var(--border);color:${t.actual ? 'var(--text)' : 'var(--accent2)'};line-height:1.4;">${t.actual || '<i>не сказано</i>'}</td>
+          <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:0.82rem;">${t.responseTime != null ? t.responseTime + 'с' : '—'}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
