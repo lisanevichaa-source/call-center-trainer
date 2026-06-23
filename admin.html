@@ -340,7 +340,7 @@ function renderSessions() {
 
   el.innerHTML = `<table>
     <thead><tr>
-      <th>Сотрудник</th><th>Сценарий</th><th>Полнота</th><th>Корректность</th><th>Стандарт</th><th>Дата</th><th></th>
+      <th>Сотрудник</th><th>Сценарий</th><th>Полнота</th><th>Эмпатия</th><th>Грамотная речь</th><th>Дата</th><th></th>
     </tr></thead>
     <tbody>
       ${sessions.map(s => `<tr>
@@ -374,11 +374,11 @@ function showSession(id) {
       </div>
       <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center;">
         <div style="font-size:1.8rem;font-weight:700;color:${s.score_correctness>=75?'#1db87a':s.score_correctness>=50?'#1d5ae8':'#e8341d'}">${s.score_correctness}%</div>
-        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">КОРРЕКТНОСТЬ</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">ЭМПАТИЯ</div>
       </div>
       <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center;">
         <div style="font-size:1.8rem;font-weight:700;color:${s.score_standard>=75?'#1db87a':s.score_standard>=50?'#1d5ae8':'#e8341d'}">${s.score_standard}%</div>
-        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">СТАНДАРТ</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">ГРАМОТНАЯ РЕЧЬ</div>
       </div>
     </div>
 

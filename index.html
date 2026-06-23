@@ -832,8 +832,8 @@ async function generateFeedback() {
 Верни ответ ТОЛЬКО в формате JSON без markdown. Формат:
 {
   "coverage": число от 0 до 100 (насколько полно оператор передал смысл эталонных фраз),
-  "correctness": число от 0 до 100 (точность формулировок),
-  "standard": число от 0 до 100 (соответствие стандарту обслуживания),
+  "correctness": число от 0 до 100 (эмпатия — насколько оператор проявил участие, понимание и вежливость),
+  "standard": число от 0 до 100 (грамотная речь — чёткость, грамотность, отсутствие слов-паразитов),
   "summary": "краткое резюме 1-2 предложения",
   "good": ["что оператор сказал хорошо 1", "хорошее 2"],
   "improve": ["что нужно улучшить 1", "улучшить 2"],
@@ -867,8 +867,8 @@ async function generateFeedback() {
     // Scores
     const scores = [
       { label: 'Полнота', value: fb.coverage, key: 'coverage' },
-      { label: 'Корректность', value: fb.correctness, key: 'correctness' },
-      { label: 'Стандарт', value: fb.standard, key: 'standard' }
+      { label: 'Эмпатия', value: fb.correctness, key: 'correctness' },
+      { label: 'Грамотная речь', value: fb.standard, key: 'standard' }
     ];
 
     document.getElementById('scoreGrid').innerHTML = scores.map(s => {
