@@ -390,13 +390,20 @@ function showSession(id) {
         <th style="width:30px;">№</th>
         <th>Эталон</th>
         <th>Сказано</th>
+        <th style="width:80px;text-align:center;">⏱ Время</th>
       </tr></thead>
       <tbody>
-        ${turns.map((t, i) => `<tr>
-          <td style="color:var(--muted)">${i+1}</td>
-          <td style="color:#1db87a;font-size:0.8rem;">${t.expected || ''}</td>
-          <td style="color:${t.actual?'var(--text)':'var(--accent2)'};font-size:0.8rem;">${t.actual || '<i>не сказано</i>'}</td>
-        </tr>`).join('')}
+        ${turns.map((t, i) => {
+          const rt = t.responseTime;
+          const timeStr = rt != null ? (rt >= 60 ? Math.floor(rt/60) + 'м ' + (rt%60) + 'с' : rt + 'с') : '—';
+          const timeStyle = rt > 120 ? 'color:#e8341d;font-weight:600;background:#fde8e5;' : 'color:var(--muted);';
+          return `<tr>
+            <td style="color:var(--muted)">${i+1}</td>
+            <td style="color:#1db87a;font-size:0.8rem;">${t.expected || ''}</td>
+            <td style="color:${t.actual?'var(--text)':'#e8341d'};font-size:0.8rem;">${t.actual || '<i>не сказано</i>'}</td>
+            <td style="text-align:center;font-size:0.8rem;${timeStyle}">${timeStr}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
 
