@@ -944,7 +944,6 @@ async function generateFeedback() {
 // ─── Speech Recognition (Yandex SpeechKit STT) ──────────────────────────────
 let mediaRecorder = null;
 let audioChunks = [];
-let silenceTimer = null;
 
 function toggleRecording() {
   if (!sessionActive) return;
@@ -959,8 +958,6 @@ let audioContext = null;
 let audioProcessor = null;
 let audioStream = null;
 let pcmChunks = [];
-let silenceCounter = 0;
-let hasVoice = false;
 
 async function startRecording() {
   try {
@@ -971,8 +968,6 @@ async function startRecording() {
     const source = audioContext.createMediaStreamSource(audioStream);
     audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
     pcmChunks = [];
-    silenceCounter = 0;
-    hasVoice = false;
 
     audioProcessor.onaudioprocess = (e) => {
       if (!isRecording) return;
@@ -996,17 +991,8 @@ async function startRecording() {
       }
       pcmChunks.push(pcm.buffer.slice(0));
 
-      // Silence detection
-      if (maxAmp > 0.01) {
-        hasVoice = true;
-        silenceCounter = 0;
-      } else if (hasVoice) {
-        silenceCounter++;
-        if (silenceCounter > 10) stopRecording();
-      }
-
       const secs = Math.round(pcmChunks.length * outLength / targetRate);
-      if (secs > 0) document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы отправить)`;
+      if (secs > 0) document.getElementById('controlInfo').textContent = `🎤 Запись ${secs}с... (нажмите 🎤 чтобы остановить)`;
     };
 
     source.connect(audioProcessor);
@@ -1036,7 +1022,7 @@ function stopRecording() {
   document.getElementById('controlInfo').textContent = 'РАСПОЗНАЮ...';
   setStatus('АКТИВНА', true, false);
 
-  if (pcmChunks.length > 0 && hasVoice) {
+  if (pcmChunks.length > 0) {
     recognizeWithYandex();
   } else {
     document.getElementById('controlInfo').textContent = 'НАЖМИТЕ 🎤 ДЛЯ ОТВЕТА';
