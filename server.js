@@ -310,8 +310,8 @@ const server = http.createServer(async (req, res) => {
         { header: 'Сотрудник',     key: 'employee',   width: 20 },
         { header: 'Сценарий',      key: 'scenario',   width: 30 },
         { header: 'Полнота %',     key: 'coverage',   width: 12 },
-        { header: 'Корректность %',key: 'correctness',width: 16 },
-        { header: 'Стандарт %',    key: 'standard',   width: 12 },
+        { header: 'Эмпатия %',     key: 'correctness',width: 14 },
+        { header: 'Грамотная речь %', key: 'standard', width: 18 },
         { header: 'Дата',          key: 'date',        width: 20 },
       ];
 
