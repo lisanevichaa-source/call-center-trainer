@@ -898,7 +898,7 @@ async function generateFeedback() {
           <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:0.75rem;">${i+1}</td>
           <td style="padding:7px 12px;border:1px solid var(--border);color:var(--text);line-height:1.4;">${t.expected}</td>
           <td style="padding:7px 12px;border:1px solid var(--border);color:${t.actual ? 'var(--text)' : 'var(--accent2)'};line-height:1.4;">${t.actual || '<i>не сказано</i>'}</td>
-          <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:0.82rem;">${t.responseTime != null ? t.responseTime + 'с' : '—'}</td>
+          <td style="padding:6px 8px;border:1px solid var(--border);text-align:center;font-size:0.82rem;${t.responseTime > 120 ? 'color:var(--accent2);font-weight:600;background:#fde8e5;' : 'color:var(--muted);'}">${t.responseTime != null ? (t.responseTime >= 60 ? Math.floor(t.responseTime/60) + 'м ' + (t.responseTime%60) + 'с' : t.responseTime + 'с') : '—'}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
